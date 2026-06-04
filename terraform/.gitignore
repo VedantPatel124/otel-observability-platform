@@ -1,0 +1,22 @@
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+
+# AWS
+*.pem
+.aws/
+
+# Kubernetes
+kubeconfig
+
+# Environment files
+.env
+.env.*
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
