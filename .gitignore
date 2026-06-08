@@ -1,22 +1,19 @@
+# macOS
+.DS_Store
+
 # Terraform
 **/.terraform/*
 *.tfstate
 *.tfstate.*
 .terraform.lock.hcl
 
-# AWS
-*.pem
-.aws/
-
-# Kubernetes
-kubeconfig
-
 # Environment files
 .env
 .env.*
 
-# macOS
-.DS_Store
+# Node
+node_modules/
 
-# Logs
-*.log
+# Python
+__pycache__/
+*.pyc
