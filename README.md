@@ -2,40 +2,21 @@
 
 ## Project Overview
 
-This project demonstrates the deployment of a cloud-native microservices application on AWS EKS using Infrastructure as Code, Kubernetes, Docker, and CI/CD automation.
+This project demonstrates the deployment of a cloud-native microservices application on Amazon EKS using Infrastructure as Code, Kubernetes, CI/CD automation, and AWS-native networking components.
 
-The application is based on the OpenTelemetry Demo and serves as a real-world workload for implementing modern DevOps practices on AWS.
-
-The project showcases:
-
-* Infrastructure provisioning using Terraform
-* Kubernetes deployment on Amazon EKS
-* Docker containerization
-* CI/CD automation using GitHub Actions
-* Automated Docker image build and push workflows
-* Kubernetes deployment manifest updates
-* Modular Infrastructure as Code design
-
----
-
-## Disclaimer
-
-This project uses the OpenTelemetry Demo application as the sample microservices workload.
-
-The primary focus of this repository is demonstrating DevOps practices including Infrastructure as Code, Kubernetes orchestration, CI/CD automation, containerization, and AWS cloud infrastructure deployment.
-
----
+The application is based on the OpenTelemetry Demo microservices architecture and is deployed using a production-style DevOps workflow.
 
 ## Key Features
 
-* Provision AWS infrastructure using Terraform
-* Deploy Amazon EKS clusters using reusable Terraform modules
-* Deploy microservices using Kubernetes manifests
-* Containerize services using Docker
-* Automate build, test, and deployment workflows using GitHub Actions
-* Build and publish Docker images automatically
-* Maintain Infrastructure as Code using Terraform modules
-* Deploy a production-style microservices application
+* Infrastructure provisioning using Terraform
+* Amazon EKS cluster deployment
+* Kubernetes-based microservices orchestration
+* GitHub Actions CI/CD pipeline
+* AWS Load Balancer Controller integration
+* Kubernetes Ingress for external access
+* Docker-based containerized services
+* EC2 management/bastion host for cluster operations
+* OpenTelemetry Demo microservices deployment
 
 ---
 
@@ -51,19 +32,28 @@ GitHub Actions
 Docker Build & Push
         │
         ▼
-Docker Hub
+Amazon ECR / Container Images
         │
         ▼
-AWS Infrastructure (Terraform)
+Terraform
         │
         ▼
-Amazon EKS Cluster
+Amazon EKS
         │
         ▼
-Kubernetes Deployment
+Kubernetes Cluster
         │
         ▼
-OpenTelemetry Demo Microservices
+OpenTelemetry Demo
+        │
+        ▼
+AWS Load Balancer Controller
+        │
+        ▼
+Application Load Balancer (ALB)
+        │
+        ▼
+End Users
 ```
 
 ---
@@ -72,10 +62,12 @@ OpenTelemetry Demo Microservices
 
 ### Cloud
 
+* AWS EC2
 * AWS EKS
 * AWS VPC
 * AWS IAM
 * AWS S3
+* AWS Route 53 (Optional)
 
 ### Infrastructure as Code
 
@@ -94,7 +86,7 @@ OpenTelemetry Demo Microservices
 
 * GitHub Actions
 
-### Languages & Frameworks
+### Languages
 
 * Go
 * Java
@@ -131,7 +123,6 @@ otel-observability-platform
 │       ├── internal/
 │       ├── test/
 │       ├── docker-compose.yml
-│       ├── docker-compose.minimal.yml
 │       └── Makefile
 │
 ├── README.md
@@ -143,13 +134,15 @@ otel-observability-platform
 
 ## Prerequisites
 
-Install the following tools:
+Install the following tools on your EC2 management instance or local machine:
 
 * AWS CLI
 * Terraform
 * kubectl
-* Docker Desktop
+* Docker
 * Git
+* Helm
+* eksctl
 
 Verify installation:
 
@@ -158,7 +151,8 @@ aws --version
 terraform --version
 kubectl version --client
 docker --version
-git --version
+helm version
+eksctl version
 ```
 
 ---
@@ -181,16 +175,7 @@ cd otel-observability-platform
 aws configure
 ```
 
-Provide:
-
-```text
-AWS Access Key ID
-AWS Secret Access Key
-Region
-Output Format
-```
-
-Verify configuration:
+Verify:
 
 ```bash
 aws sts get-caller-identity
@@ -200,197 +185,190 @@ aws sts get-caller-identity
 
 ## Step 3: Create Terraform Backend
 
-Navigate to backend configuration:
-
 ```bash
 cd terraform/backend
-```
 
-Initialize Terraform:
-
-```bash
 terraform init
-```
 
-Create backend resources:
-
-```bash
 terraform apply -auto-approve
 ```
 
-Resources created:
+This creates:
 
 * S3 Bucket for Terraform State
-* Remote State Backend Configuration
+* DynamoDB Lock Table
 
 ---
 
-## Step 4: Provision AWS Infrastructure
-
-Navigate to Terraform root directory:
+## Step 4: Provision Infrastructure
 
 ```bash
 cd ..
-```
 
-Initialize Terraform:
-
-```bash
 terraform init
-```
 
-Review execution plan:
-
-```bash
 terraform plan
-```
 
-Deploy infrastructure:
-
-```bash
 terraform apply -auto-approve
 ```
 
-Resources created:
+Resources Created:
 
 * VPC
 * Public Subnets
 * Private Subnets
 * Internet Gateway
 * NAT Gateway
-* Amazon EKS Cluster
-* EKS Managed Node Group
+* EKS Cluster
+* Managed Node Group
 
 ---
 
 ## Step 5: Configure kubectl
 
-Connect kubectl to EKS:
-
 ```bash
 aws eks update-kubeconfig \
-  --region us-east-1 \
-  --name demo-eks-cluster
+--region us-east-1 \
+--name demo-eks-cluster
 ```
 
-Verify cluster access:
+Verify:
 
 ```bash
 kubectl get nodes
 ```
 
-Expected output:
-
-```text
-STATUS: Ready
-```
-
 ---
 
-## Step 6: Deploy Application
-
-Navigate to Kubernetes manifests:
+## Step 6: Deploy OpenTelemetry Application
 
 ```bash
 cd ../kubernetes
-```
 
-Deploy all services:
-
-```bash
 kubectl apply -f complete-deploy.yaml
 ```
 
-Verify deployment:
+Verify:
 
 ```bash
 kubectl get pods
-```
 
-Wait until all pods show:
-
-```text
-Running
+kubectl get svc
 ```
 
 ---
 
-## Step 7: Verify Services
+## Step 7: Configure AWS Load Balancer Controller
 
-View services:
+Associate OIDC Provider:
 
 ```bash
-kubectl get svc
+eksctl utils associate-iam-oidc-provider \
+--cluster demo-eks-cluster \
+--approve
 ```
 
-View ingress:
+Create IAM Policy:
+
+```bash
+curl -O https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.11.0/docs/install/iam_policy.json
+```
+
+Create IAM Service Account:
+
+```bash
+eksctl create iamserviceaccount \
+--cluster=demo-eks-cluster \
+--namespace=kube-system \
+--name=aws-load-balancer-controller \
+--role-name=AmazonEKSLoadBalancerControllerRole \
+--attach-policy-arn=<IAM_POLICY_ARN> \
+--approve
+```
+
+Install AWS Load Balancer Controller:
+
+```bash
+helm repo add eks https://aws.github.io/eks-charts
+
+helm repo update
+
+helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
+-n kube-system \
+--set clusterName=demo-eks-cluster \
+--set serviceAccount.create=false \
+--set serviceAccount.name=aws-load-balancer-controller \
+--set region=us-east-1 \
+--set vpcId=<VPC_ID>
+```
+
+Verify:
+
+```bash
+kubectl get deployment -n kube-system aws-load-balancer-controller
+```
+
+---
+
+## Step 8: Deploy Ingress
+
+```bash
+kubectl apply -f frontendproxy/ingress.yaml
+```
+
+Verify:
 
 ```bash
 kubectl get ingress
 ```
 
-Access the application using the Load Balancer endpoint.
+After a few minutes, an AWS Application Load Balancer will be provisioned automatically.
 
 ---
 
-## Local Development Using Docker Compose
+## Step 9: Access the Application
 
-Navigate to application directory:
-
-```bash
-cd app/opentelemetry-demo
-```
-
-Start application:
+Retrieve the ALB DNS name:
 
 ```bash
-docker compose up -d
+kubectl get ingress
 ```
 
-Verify containers:
+Open:
 
-```bash
-docker ps
+```text
+http://<ALB-DNS-NAME>
 ```
-
-Stop application:
-
-```bash
-docker compose down
-```
-
----
-
-## CI/CD Pipeline
-
-GitHub Actions is configured for the Product Catalog microservice and performs:
-
-* Source Code Checkout
-* Dependency Installation
-* Application Build
-* Unit Testing
-* Static Code Analysis
-* Docker Image Build
-* Docker Image Push to Docker Hub
-* Kubernetes Manifest Update
 
 ---
 
 ## Useful Commands
 
-### View Pods
+### Nodes
 
 ```bash
-kubectl get pods
+kubectl get nodes
 ```
 
-### View Services
+### Pods
+
+```bash
+kubectl get pods -A
+```
+
+### Services
 
 ```bash
 kubectl get svc
 ```
 
-### View Logs
+### Ingress
+
+```bash
+kubectl get ingress
+```
+
+### Logs
 
 ```bash
 kubectl logs <pod-name>
@@ -402,31 +380,31 @@ kubectl logs <pod-name>
 kubectl rollout restart deployment <deployment-name>
 ```
 
-### Delete Application
-
-```bash
-kubectl delete -f complete-deploy.yaml
-```
-
 ---
 
 ## Cleanup
 
-Delete Kubernetes resources:
+Delete Application:
 
 ```bash
-kubectl delete -f complete-deploy.yaml
+kubectl delete -f kubernetes/complete-deploy.yaml
 ```
 
-Destroy infrastructure:
+Remove ALB Controller:
 
 ```bash
-cd ../terraform
+helm uninstall aws-load-balancer-controller -n kube-system
+```
+
+Destroy Infrastructure:
+
+```bash
+cd terraform
 
 terraform destroy -auto-approve
 ```
 
-Destroy backend resources:
+Destroy Backend:
 
 ```bash
 cd backend
@@ -438,15 +416,15 @@ terraform destroy -auto-approve
 
 ## Future Enhancements
 
-* ArgoCD GitOps Deployment
-* Blue/Green Deployments
-* Canary Releases
+* Route 53 Custom Domain
+* ACM SSL Certificates
+* ArgoCD GitOps
 * Prometheus Monitoring
 * Grafana Dashboards
-* Jaeger Distributed Tracing
-* Helm Charts
-* Multi-Environment Deployments
-* Security Scanning Integration
+* Helm-based Deployments
+* Multi-Environment Support
+* Blue-Green Deployments
+* Canary Releases
 
 ---
 
@@ -454,4 +432,4 @@ terraform destroy -auto-approve
 
 Vedant Patel
 
-Software Engineering Graduate | AWS | Terraform | Kubernetes | Docker | GitHub Actions | DevOps
+Software Engineering Graduate | AWS | Terraform | Kubernetes | DevOps | Cloud Infrastructure
